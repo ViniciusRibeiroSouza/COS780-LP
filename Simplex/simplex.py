@@ -1,6 +1,6 @@
 import numpy as np
 
-from SimplexSolver.statandardFormLP import StandardFormLP
+from Simplex.SimplexSolver import StandardFormLP, TwoPhaseSimplexSolver
 
 A = [[-2, 3, -10, 0],
      [3, 2, 0, 15]]
@@ -18,5 +18,5 @@ model = StandardFormLP(a_matrix=np.array(A),
                        max_or_min='min',
                        signs=signs,
                        directions=directions)
-var = model.get_standard_lp_form()
-print(var)
+solver = TwoPhaseSimplexSolver(verbose=False)
+var_1, var_2, var_3 = solver.solve(model=model)

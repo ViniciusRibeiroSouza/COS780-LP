@@ -1,8 +1,9 @@
 import numpy as np
-from SimplexSolver.statandardFormLP import StandardFormLP
+# from numba import jit
+from Simplex.SimplexSolver.standard_linear_programming_form import StandardFormLP
 
 
-class TwoPhaseSimplex:
+class TwoPhaseSimplexSolver:
     # BFS = Base Feasible Set
     def __init__(self, verbose=False):
         self.verbose = verbose
@@ -38,6 +39,7 @@ class TwoPhaseSimplex:
             return 'Unbounded', None, None
 
 
+# @jit(nopython=True)
 def _phase2_simplex(matrix_a, cost_vector, base_feasible_set, verbose):
     # Phase 2 of the Two-Phase simplex algorithm. Assumes the table is starting at a base_feasible_set.
     if verbose:  # todo change this to print matrix
@@ -47,8 +49,9 @@ def _phase2_simplex(matrix_a, cost_vector, base_feasible_set, verbose):
     return matrix_a, obj, base_feasible_set, bounded
 
 
+# @jit(nopython=True)
 def _phase1_simplex(matrix_a, artificial_vars, base_feasible_set, verbose=False):
-    # Phase 1 of the Two-Phase Simplex Algorithm
+    # Phase 1 of the Two-Phase SimplexSolver Algorithm
     if verbose:  # todo change this to print matrix
         pass
     obj = _create_aux_slack_var_cost_function(matrix_a, artificial_vars, base_feasible_set)
@@ -60,6 +63,7 @@ def _phase1_simplex(matrix_a, artificial_vars, base_feasible_set, verbose=False)
         return False, (None, None)
 
 
+# @jit(nopython=True)
 def _create_aux_slack_var_cost_function(matrix_a, artificial_vars, base_feasible_set):
     # Create the objective function
     n_cols = matrix_a.shape[1]
@@ -69,6 +73,7 @@ def _create_aux_slack_var_cost_function(matrix_a, artificial_vars, base_feasible
     return _calc_objective_function_value(matrix_a, aux_slack_cost_vector, base_feasible_set)
 
 
+# @jit(nopython=True)
 def _simplex(matrix_a, objective_vector, base_feasible_set, verbose):
     # The simplex algorithm. Takes a bfs as input. Uses Bland's rule to avoid cycling.
     # Should only take in feasible problems.
@@ -102,6 +107,7 @@ def _simplex(matrix_a, objective_vector, base_feasible_set, verbose):
     return matrix_a, objective_vector, base_feasible_set, True
 
 
+# @jit(nopython=True)
 def _calc_objective_function_value(table, c, base_feasible_set):
     n, m = table.shape
     obj = np.append(c, 0)
@@ -112,6 +118,7 @@ def _calc_objective_function_value(table, c, base_feasible_set):
     return obj
 
 
+# @jit(nopython=True)
 def _pivot(table, obj, row, column):
     # Row Reduction
     table[row, :] = table[row, :] / table[row, column]
