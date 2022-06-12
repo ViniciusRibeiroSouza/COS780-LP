@@ -2,8 +2,8 @@ import numpy as np
 
 from Simplex.SimplexSolver import StandardFormLP, TwoPhaseSimplexSolver
 
-A = [[-2, 3, -10, 0],
-     [3, 2, 0, 15]]
+A = [[-2, 3, -1, 0],
+     [3, 2, 0, -1]]
 B = [[9],
      [12]]
 C = [[2],

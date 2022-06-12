@@ -54,17 +54,17 @@ def _phase1_simplex(matrix_a, artificial_vars, base_feasible_set, verbose=False)
     # Phase 1 of the Two-Phase SimplexSolver Algorithm
     if verbose:  # todo change this to print matrix
         pass
-    obj = _create_aux_slack_var_cost_function(matrix_a, artificial_vars, base_feasible_set)
-    matrix_a, obj, base_feasible_set, _ = _simplex(matrix_a, obj, base_feasible_set, verbose)
+    cost_vector = _create_aux_slack_cost_function(matrix_a, artificial_vars, base_feasible_set)
+    matrix_a, cost_vector, base_feasible_set, _ = _simplex(matrix_a, cost_vector, base_feasible_set, verbose)
     # If the objective value is close enough to 0, it is feasible.
-    if np.isclose(obj[-1], 0):
+    if np.isclose(cost_vector[-1], 0):
         return True, (matrix_a, base_feasible_set)
     else:
         return False, (None, None)
 
 
 # @jit(nopython=True)
-def _create_aux_slack_var_cost_function(matrix_a, artificial_vars, base_feasible_set):
+def _create_aux_slack_cost_function(matrix_a, artificial_vars, base_feasible_set):
     # Create the objective function
     n_cols = matrix_a.shape[1]
     aux_slack_cost_vector = np.zeros(n_cols - 1)
