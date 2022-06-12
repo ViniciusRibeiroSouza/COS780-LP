@@ -11,12 +11,12 @@ C = [[2],
      [0],
      [0]]
 signs = ['>', '>', '>']
-directions = ['=', '=']
+directions = ['=', '>']
 model = StandardFormLP(a_matrix=np.array(A),
                        b_matrix=np.array(B),
                        c_matrix=np.array(C),
                        max_or_min='min',
                        signs=signs,
                        directions=directions)
-var = model.get_simplex_phase_1_form()
+var = model.get_standard_lp_form()
 print(var)

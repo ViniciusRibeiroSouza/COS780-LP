@@ -57,7 +57,7 @@ class StandardFormLP:
                 self.c = np.append(self.c, 0)
                 self.slacks_variables.append(self.A.shape[1] - 1)
 
-    def get_simplex_phase_1_form(self):
+    def get_standard_lp_form(self):
         """
         Generates a table for Phase 1 of the simplex algorithm.
         Adds artificial variables as needed.
