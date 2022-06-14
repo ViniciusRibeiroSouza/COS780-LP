@@ -1,3 +1,5 @@
+import pprint
+
 import numpy as np
 # from numba import jit
 from Simplex.SimplexSolver.standard_linear_programming_form import StandardFormLP
@@ -7,19 +9,35 @@ class TwoPhaseSimplexSolver:
     # BFS = Base Feasible Set
     def __init__(self, verbose=False):
         self.verbose = verbose
-        self.base_feasible_set = None
+        self.vars = None
+        self.current_b = None
         self.A_expanded = None
+        self.non_base_vars = None
         self.artificial_vars = None
+        self.base_feasible_set = None
+
+    def _phase1_simplex(self, artificial_vars_index, base_index, verbose=False):
+        # Phase 1 of the Two-Phase SimplexSolver Algorithm
+        n_variables = matrix_A.shape[1]
+        cost_vector = _create_aux_slack_cost_function(n_variables, artificial_vars_index)
+        if verbose:
+            pprint.pprint(f"Phase 1: Cost Vector: {cost_vector}")
+        cost_vector, base_index, non_base_index = _simplex(matrix_A, matrix_b, cost_vector,
+                                                           base_index, verbose)
+        # If the objective value is close enough to 0, it is feasible.
+        if np.min(cost_vector) >= 0:
+            return True, (base_index, non_base_index)
+        else:
+            return False, (None, None)
 
     def solve(self, model: StandardFormLP):
         """ Solves a simplex instance. """
-        self.A_expanded, self.artificial_vars, self.base_feasible_set = model.get_standard_lp_form()
+        self.A_expanded, self.current_b, self.artificial_vars, self.base_feasible_set = model.get_standard_lp_form()
         rows, columns = self.A_expanded.shape
+        self.vars = {i: str(i) for i in range(self.A_expanded.shape[1])}
         # Phase 1 (Only if we have artificial variables)
         if len(self.artificial_vars) != 0:
-            is_feasible, table_vals = _phase1_simplex(self.A_expanded, self.artificial_vars,
-                                                      self.base_feasible_set, self.verbose)
-            self.A_expanded, self.base_feasible_set = table_vals
+            self._phase1_simplex()
             if not is_feasible:
                 return 'Infeasible', None, None
             # Remove artificial variables
@@ -39,92 +57,101 @@ class TwoPhaseSimplexSolver:
             return 'Unbounded', None, None
 
 
-# @jit(nopython=True)
-def _phase2_simplex(matrix_a, cost_vector, base_feasible_set, verbose):
-    # Phase 2 of the Two-Phase simplex algorithm. Assumes the table is starting at a base_feasible_set.
-    if verbose:  # todo change this to print matrix
-        pass
-    obj = _calc_objective_function_value(matrix_a, cost_vector, base_feasible_set)
-    matrix_a, obj, base_feasible_set, bounded = _simplex(matrix_a, obj, base_feasible_set, True)
-    return matrix_a, obj, base_feasible_set, bounded
+# # @jit(nopython=True)
+# def _phase2_simplex(matrix_a, cost_vector, base_feasible_set, verbose):
+#     # Phase 2 of the Two-Phase simplex algorithm. Assumes the table is starting at a base_feasible_set.
+#     if verbose:  # todo change this to print matrix
+#         pass
+#     obj = _calc_objective_function_value(matrix_a, cost_vector, base_feasible_set)
+#     matrix_a, obj, base_feasible_set, bounded = _simplex(matrix_a, obj, base_feasible_set, True)
+#     return matrix_a, obj, base_feasible_set, bounded
 
 
 # @jit(nopython=True)
-def _phase1_simplex(matrix_a, artificial_vars, base_feasible_set, verbose=False):
-    # Phase 1 of the Two-Phase SimplexSolver Algorithm
-    if verbose:  # todo change this to print matrix
-        pass
-    cost_vector = _create_aux_slack_cost_function(matrix_a, artificial_vars, base_feasible_set)
-    matrix_a, cost_vector, base_feasible_set, _ = _simplex(matrix_a, cost_vector, base_feasible_set, verbose)
-    # If the objective value is close enough to 0, it is feasible.
-    if np.isclose(cost_vector[-1], 0):
-        return True, (matrix_a, base_feasible_set)
-    else:
-        return False, (None, None)
+
 
 
 # @jit(nopython=True)
-def _create_aux_slack_cost_function(matrix_a, artificial_vars, base_feasible_set):
+def _create_aux_slack_cost_function(n_variables, artificial_vars, high_cost_const=10e3):
     # Create the objective function
-    n_cols = matrix_a.shape[1]
-    aux_slack_cost_vector = np.zeros(n_cols - 1)
+    aux_slack_cost_vector = np.zeros(n_variables)
     artificial_cols = list(map(lambda x: x[1], artificial_vars))
-    aux_slack_cost_vector[artificial_cols] = -1
-    return _calc_objective_function_value(matrix_a, aux_slack_cost_vector, base_feasible_set)
+    aux_slack_cost_vector[artificial_cols] = 1 * high_cost_const
+    return np.array(aux_slack_cost_vector)
+
+
+def get_array_from_index(array, list_of_index):
+    return np.take(array.copy(), list_of_index, axis=1)
+
+
+def get_reduced_cost_vector(matrix_A, vector_Cost, non_base_index, base_index, inv_matrix_base):
+    vector_cost_non_base_vars = get_array_from_index(vector_Cost, non_base_index)
+    vector_cost_base_vars = get_array_from_index(vector_Cost, base_index)
+    matrix_a_non_base_vars = get_array_from_index(matrix_A, non_base_index)
+    first_mat_multiplication = np.matmul(vector_cost_base_vars, inv_matrix_base)
+    second_mat_multiplication = np.matmul(first_mat_multiplication, matrix_a_non_base_vars)
+    reduce_cost_transposed = vector_cost_non_base_vars - second_mat_multiplication
+    return reduce_cost_transposed
 
 
 # @jit(nopython=True)
-def _simplex(matrix_a, objective_vector, base_feasible_set, verbose):
-    # The simplex algorithm. Takes a bfs as input. Uses Bland's rule to avoid cycling.
-    # Should only take in feasible problems.
+def _simplex(matrix_A, vector_b, vector_Cost, base_feasible_set, verbose):
+    # The simplex algorithm. Uses Bland's rule to avoid cycling.
+    reduced_cost = None
+    inv_matrix_base = None
+    n_cols_matrix_a = matrix_A.shape[1]
+    base_index = get_values_from_set(base_feasible_set)
+    non_base_index = get_non_base_index(base_index, n_cols_matrix_a)
     while True:
-        if verbose:  # todo change this to print matrix
-            pass
         # Find the variable to enter the basis. Using Bland's Rule (select the first)
-        negatives = np.where(objective_vector[:-1] < 0)[0]
-        if len(negatives) == 0:
+        inverse_base_matrix, inverse_base_vector = get_inverse_base_vector(base_index, matrix_A)
+        current_base_solution = np.matmul(inverse_base_vector, vector_b)
+        reduced_cost = get_reduced_cost_vector(matrix_A, vector_Cost,
+                                               non_base_index, base_index, inverse_base_matrix)
+        interrupt, arg = get_leaving_base_index(reduced_cost)
+        if interrupt:
             break
-        new_basis = negatives[0]
-
-        # Find the variable to leave the basis. Bland's Rule.
-        row = -1
-        min_cost = float('Inf')
-        for i in range(matrix_a.shape[0]):
-            if matrix_a[i, new_basis] > 0:
-                cost = matrix_a[i, -1] / matrix_a[i, new_basis]
-                if cost < min_cost:
-                    row = i
-                    min_cost = cost
-        if row == -1:
-            return matrix_a, objective_vector, base_feasible_set, False
-        to_leave = list(filter(lambda x: x[0] == row, base_feasible_set))
-        matrix_a, objective_vector = _pivot(matrix_a, objective_vector, row, new_basis)
-        assert len(to_leave) == 1
-        base_feasible_set.remove(to_leave[0])
-        base_feasible_set.append((row, new_basis))
-        if verbose:
-            print('Removing', to_leave[0], 'Adding', new_basis)
-    return matrix_a, objective_vector, base_feasible_set, True
+        index_comparison = get_entering_base_index(arg, current_base_solution, inverse_base_vector, matrix_A)
+        update_index_base_and_non_base(arg, base_index, index_comparison, non_base_index)
+        print("OK")
+    return reduced_cost, base_index, non_base_index
 
 
-# @jit(nopython=True)
-def _calc_objective_function_value(table, c, base_feasible_set):
-    n, m = table.shape
-    obj = np.append(c, 0)
-    for coord in base_feasible_set:
-        row, col = coord
-        obj = obj - obj[col] * table[row, :]
-    obj = -1 * obj  # TODO
-    return obj
+def get_non_base_index(base_index, n_cols_matrix_a):
+    return [i for i in range(n_cols_matrix_a) if i not in base_index]
 
 
-# @jit(nopython=True)
-def _pivot(table, obj, row, column):
-    # Row Reduction
-    table[row, :] = table[row, :] / table[row, column]
-    rows, cols = table.shape
-    for r in range(rows):
-        if r != row:
-            table[r, :] = table[r, :] - table[r, column] * table[row, :]
-            obj = obj - obj[column] * table[row, :]
-    return table, obj
+def get_values_from_set(base_feasible_set):
+    return list(map(lambda x: x[1], base_feasible_set))
+
+
+def update_index_base_and_non_base(arg, base_index, index_comparison, non_base_index):
+    leave_base = base_index[index_comparison]
+    entering_base = non_base_index[arg]
+    base_index.remove(leave_base)
+    non_base_index.remove(entering_base)
+    base_index.append(entering_base)
+    non_base_index.append(leave_base)
+
+
+def get_entering_base_index(arg, current_base_solution, inverse_base_vector, matrix_a):
+    a_i = get_array_from_index(matrix_a, arg)
+    a_i = np.array([a_i]).transpose()
+    variable_cost = np.matmul(inverse_base_vector, a_i)
+    # teste da razao
+    ratio = np.divide(current_base_solution, a_i)
+    index_comparison = np.argmin(ratio)
+    return index_comparison
+
+
+def get_leaving_base_index(reduced_cost):
+    arg = np.argmax(reduced_cost * -1)
+    if reduced_cost[0][arg] >= 0:
+        pass
+    return True, arg
+
+
+def get_inverse_base_vector(base_index, matrix_a):
+    inverse_base_vector = get_array_from_index(matrix_a, base_index)
+    inverse_base_matrix = np.linalg.inv(inverse_base_vector)
+    return inverse_base_matrix, inverse_base_vector

@@ -63,7 +63,7 @@ class StandardFormLP:
         Adds artificial variables as needed.
         """
         artificial_variables = []
-        bfs = []
+        base_feasible_set = []
         np_array_b = np.array(self.b)
         rows, cols = self.A.shape
         num_artificial = min(rows, cols)
@@ -73,26 +73,26 @@ class StandardFormLP:
                 np_array_a[row] = -1 * np_array_a[row]
                 np_array_b[row] = -1 * np_array_b[row]
                 num_artificial -= 1
-                bfs.append((row, col))
+                base_feasible_set.append((row, col))
             elif np_array_a[row, col] == 1 and np_array_b[row] > 0:
-                bfs.append((row, col))
+                base_feasible_set.append((row, col))
                 num_artificial -= 1
         np_array_a = np.append(np_array_a, np.zeros(shape=[rows, num_artificial]), 1)
         # Add artificial variables
         rows, cols = np_array_a.shape
-        bfs_rows = set(map(lambda x: x[0], bfs))
+        bfs_rows = set(map(lambda x: x[0], base_feasible_set))
         artificial_val = 0
         for row_index in range(rows):
             if row_index in bfs_rows:
                 continue
             column_index = cols - num_artificial + artificial_val
             artificial_variables.append((row_index, column_index))
-            bfs.append((row_index, column_index))
+            base_feasible_set.append((row_index, column_index))
             if np_array_a[row_index, -1] < 0:
                 np_array_a[row_index, :] = -1 * np_array_a[row_index, :]
             np_array_a[row_index, column_index] = 1
             artificial_val += 1
-        return np.column_stack((np_array_a, np_array_b)), artificial_variables, bfs
+        return np_array_a, np_array_b, artificial_variables, base_feasible_set
 
     def are_dependent_constraints(self):
         number_of_rows, number_of_columns = self.A.shape

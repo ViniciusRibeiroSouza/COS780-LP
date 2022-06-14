@@ -11,7 +11,9 @@ C = [[2],
      [0],
      [0]]
 signs = ['>', '>', '>']
-directions = ['=', '>']
+directions = ['=', '=']
+
+
 model = StandardFormLP(a_matrix=np.array(A),
                        b_matrix=np.array(B),
                        c_matrix=np.array(C),
@@ -20,3 +22,6 @@ model = StandardFormLP(a_matrix=np.array(A),
                        directions=directions)
 solver = TwoPhaseSimplexSolver(verbose=False)
 var_1, var_2, var_3 = solver.solve(model=model)
+
+
+
