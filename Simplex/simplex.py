@@ -17,7 +17,7 @@ directions = ['=', '=']
 model = StandardFormLP(a_matrix=np.array(A),
                        b_matrix=np.array(B),
                        c_matrix=np.array(C),
-                       max_or_min='min',
+                       max_or_min='max',
                        signs=signs,
                        directions=directions)
 solver = TwoPhaseSimplexSolver(verbose=False)
