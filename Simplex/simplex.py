@@ -13,7 +13,6 @@ C = [[2],
 signs = ['>', '>', '>']
 directions = ['=', '=']
 
-
 model = StandardFormLP(a_matrix=np.array(A),
                        b_matrix=np.array(B),
                        c_matrix=np.array(C),
@@ -21,7 +20,10 @@ model = StandardFormLP(a_matrix=np.array(A),
                        signs=signs,
                        directions=directions)
 solver = TwoPhaseSimplexSolver(verbose=False)
-var_1, var_2, var_3 = solver.solve(model=model)
+solver.solve(model=model)
 
-
-
+# Todo: 1. Finish phase 2 simplex
+# Todo: 2. Finish inverse matrix update
+# Todo: 3. Add free variable mode inverse matrix update
+# Todo: 4. Finish code to work with max/min
+# Todo: 5. Add Big M method
