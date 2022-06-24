@@ -6,7 +6,7 @@ from Simplex.SimplexSolver.standard_linear_programming_form import StandardFormL
 
 class TwoPhaseSimplexSolver:
     # BFS = Base Feasible Set
-    def __init__(self, verbose=False):
+    def __init__(self, verbose=True):
         self.verbose = verbose
         self.vars = None
         self.current_b = None
@@ -42,9 +42,9 @@ class TwoPhaseSimplexSolver:
     def _phase2_simplex(self, cost_vector, verbose=True):
         # Phase 2 of the Two-Phase simplex algorithm. Assumes the table is starting at a base_feasible_set.
         if verbose:
-            pprint.pprint(f"Phase 2: Cost Vector: {cost_vector}")
+            phase2_print(cost_vector)
         try:
-            _, current_solution, base_index, non_base_index, is_feasible = self._simplex(cost_vector, True)
+            _, current_solution, base_index, non_base_index, is_feasible = self._simplex(cost_vector, verbose)
             return current_solution, base_index, non_base_index, is_feasible
         except Exception as error:
             print(error)
@@ -64,6 +64,7 @@ class TwoPhaseSimplexSolver:
             if verbose:
                 self.print_simplex_step(current_cost_vector=current_cost_vector)
             current_base_solution = np.matmul(self.inverse_base_matrix, self.current_b)
+            _check_current_base_solution_is_valid(current_base_solution)
             reduced_cost_vector = _get_reduced_cost_vector(self.A_expanded, current_cost_vector,
                                                            self.current_non_base_index, self.current_base_index,
                                                            self.inverse_base_matrix)
@@ -91,32 +92,34 @@ class TwoPhaseSimplexSolver:
         self.artificial_vars_index = _get_values_from_set(self.artificial_vars)
         self.current_base_index = _get_values_from_set(self.base_feasible_set)
         self.current_non_base_index = _get_non_base_index(self.current_base_index, columns)
-        # Phase 1 (Only if we have artificial variables)
-        if len(self.artificial_vars) != 0:
-            is_feasible = self._phase1_simplex()
-            if not is_feasible:
-                return 'Infeasible', None, None
-            # Remove artificial variables
-            self.A_expanded = self.A_expanded[:, 0:columns - len(self.artificial_vars)]
-            self.current_non_base_index = _get_non_base_index(self.current_base_index, self.A_expanded.shape[1])
-        # Phase 2
-        cost_vector = np.asarray(model.c)
-        if cost_vector.shape[1] == 1:
-            cost_vector = cost_vector.transpose()
-        current_solution, self.current_base_index, self.current_non_base_index, is_feasible = \
-            self._phase2_simplex(cost_vector, self.verbose)
-        if is_feasible:
-            final_cost_value = _get_final_cost_value(current_solution, cost_vector, self.current_base_index)
-            self.print_final_cost(current_solution, final_cost_value)
-            return 'Solved'
-        else:
-            return 'Unbounded'
-
-    def print_final_cost(self, current_solution, final_cost_value):
-        pprint.pprint(f" ------------- Final Step ---------------")
-        pprint.pprint(f"Final Cost: {final_cost_value}")
-        pprint.pprint(f"Final Solution: {current_solution}")
-        pprint.pprint(f"Final base index: {self.current_base_index}")
+        try:
+            # Phase 1 (Only if we have artificial variables)
+            if len(self.artificial_vars) != 0:
+                is_feasible = self._phase1_simplex(verbose=self.verbose)
+                if not is_feasible:
+                    return 'Infeasible', None, None
+                # Remove artificial variables
+                self.A_expanded = self.A_expanded[:, 0:columns - len(self.artificial_vars)]
+                self.current_non_base_index = _get_non_base_index(self.current_base_index, self.A_expanded.shape[1])
+            # Phase 2
+            cost_vector = np.asarray(model.c)
+            if cost_vector.shape[1] == 1:
+                cost_vector = cost_vector.transpose()
+            current_solution, self.current_base_index, self.current_non_base_index, is_feasible = \
+                self._phase2_simplex(cost_vector, self.verbose)
+            if is_feasible:
+                final_cost_value = _get_final_cost_value(current_solution, cost_vector, self.current_base_index)
+                if self.verbose:
+                    print_final_cost(self.current_base_index, current_solution, final_cost_value)
+                return 'Solved', final_cost_value, current_solution
+            else:
+                return 'Unbounded', None, None
+        except Exception as error:
+            if type(error).__name__ == ValueError.__name__:
+                pprint.pprint(error)
+                return 'Unbounded', None, None
+            else:
+                pprint.pprint(f"Got exception error: {error}")
 
     def inverse_base_matrix_update(self, index_to_leave_base=None, index_entering_base=None):
         matrix_a_base_cols = _get_array_from_index(self.A_expanded, self.current_base_index)
@@ -126,6 +129,23 @@ class TwoPhaseSimplexSolver:
         #     self.inverse_base_matrix = np.linalg.inv(matrix_a_base_cols)
         # else:
         #     pass
+
+
+def print_final_cost(current_base_index, current_solution, final_cost_value):
+    pprint.pprint(f" ------------- Final Step ---------------")
+    pprint.pprint(f"Final Cost: {final_cost_value}")
+    pprint.pprint(f"Final Solution: {current_solution}")
+    pprint.pprint(f"Final base index: {current_base_index}")
+
+
+def phase2_print(cost_vector):
+    pprint.pprint(f"-----------------------------------")
+    pprint.pprint(f"Phase 2: Cost Vector: {cost_vector}")
+
+
+def _check_current_base_solution_is_valid(current_base_solution):
+    if np.min(current_base_solution) < 0:
+        raise ValueError("Solution must be grater than or equal 0.")
 
 
 def _get_final_cost_value(current_solution, cost_vector, current_base_index):
@@ -168,11 +188,17 @@ def _get_values_from_set(base_feasible_set):
 
 
 # @jit(nopython=True)
+def filter_ratio_test_for_non_negative_variables(vector_1, vector_2):
+    pass
+
+
 def get_entering_base_index(index_to_leave_base, current_base_solution, inverse_base_vector, matrix_a):
     # Implements ration test to get the index og the column entering the base
     leaving_base_column = _get_array_from_index(matrix_a, index_to_leave_base)
     leaving_base_column = np.array([leaving_base_column]).transpose()
     variable_cost_column = np.matmul(inverse_base_vector, leaving_base_column)
+    leaving_base_column, variable_cost_column = filter_ratio_test_for_non_negative_variables(current_base_solution,
+                                                                                             variable_cost_column)
     ratio = np.divide(current_base_solution, variable_cost_column)
     index_entering_base = np.argmin(np.abs(ratio))
     return index_entering_base

@@ -10,7 +10,7 @@ C = [[2],
      [1],
      [0],
      [0]]
-signs = ['>', '>', '>']
+signs = ['=', '<', '<']
 directions = ['=', '=']
 
 model = StandardFormLP(a_matrix=np.array(A),
@@ -19,7 +19,7 @@ model = StandardFormLP(a_matrix=np.array(A),
                        max_or_min='max',
                        signs=signs,
                        directions=directions)
-solver = TwoPhaseSimplexSolver(verbose=False)
+solver = TwoPhaseSimplexSolver(verbose=True)
 solver.solve(model=model)
 
 # Todo: 1. Finish phase 2 simplex
