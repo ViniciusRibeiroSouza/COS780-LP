@@ -3,7 +3,7 @@ import numpy as np
 
 class StandardFormLP:
     # Todo adjust documentation and variables behavior.
-    def __init__(self, a_matrix, b_matrix, c_matrix, signs=None, directions=None, max_or_min=None, standard_obj='max'):
+    def __init__(self, a_matrix, b_matrix, c_matrix, signs=None, directions=None, max_or_min=None, standard_obj='min'):
         """
         Constructs a StandardFormLP from a Generic LP.
             max c^T x (can also be min, if standard_obj='min')
@@ -27,7 +27,6 @@ class StandardFormLP:
         """
         Alters the A and c matrix so that all variables have domain x >= 0.
         """
-        # Todo: Adjust problem if variables are free
         for i, variable_restriction in enumerate(domain_restrictions):
             if variable_restriction == '<':
                 self.c[i] *= -1

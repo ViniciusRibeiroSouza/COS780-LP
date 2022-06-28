@@ -1,6 +1,5 @@
 import pprint
 import numpy as np
-# from numba import jit
 from Simplex.SimplexSolver.standard_linear_programming_form import StandardFormLP
 
 
@@ -31,8 +30,7 @@ class TwoPhaseSimplexSolver:
         cost_vector = _create_aux_slack_cost_function(n_variables, self.artificial_vars_index)
         if verbose:
             pprint.pprint(f"Phase 1: Cost Vector: {cost_vector}")
-        cost_vector, current_solution, self.current_base_index, self.current_non_base_index, is_feasible \
-            = self._simplex(cost_vector, verbose)
+        cost_vector, current_solution, self.current_base_index, self.current_non_base_index, is_feasible = self._simplex(cost_vector, verbose)
         # If the objective value is close enough to 0, it is feasible.
         if np.min(cost_vector) >= 0 and is_feasible:
             return True
@@ -43,14 +41,11 @@ class TwoPhaseSimplexSolver:
         # Phase 2 of the Two-Phase simplex algorithm. Assumes the table is starting at a base_feasible_set.
         if verbose:
             phase2_print(cost_vector)
-        try:
-            _, current_solution, base_index, non_base_index, is_feasible = self._simplex(cost_vector, verbose)
-            return current_solution, base_index, non_base_index, is_feasible
-        except Exception as error:
-            print(error)
+        _, current_solution, base_index, non_base_index, is_feasible = self._simplex(cost_vector, verbose)
+        return current_solution, base_index, non_base_index, is_feasible
 
     def _simplex(self, current_cost_vector, verbose):
-        # The simplex algorithm. Uses Bland's rule to avoid cycling.
+        # The simplex algorithm. Uses Bland rule to avoid cycling.
         is_feasible = True
         iterations = 10e3
         reduced_cost_vector = None
@@ -75,8 +70,7 @@ class TwoPhaseSimplexSolver:
                                                           self.inverse_base_matrix, self.A_expanded)
             self.index_update(index_to_leave_base, index_entering_base)
             self.inverse_base_matrix_update(index_to_leave_base, index_entering_base)
-        return reduced_cost_vector, current_base_solution, self.current_base_index, \
-               self.current_non_base_index, is_feasible
+        return reduced_cost_vector, current_base_solution, self.current_base_index, self.current_non_base_index, is_feasible
 
     def print_simplex_step(self, current_cost_vector):
         pprint.pprint(f" ------------- Simplex Step ---------------")
@@ -102,13 +96,13 @@ class TwoPhaseSimplexSolver:
                 self.A_expanded = self.A_expanded[:, 0:columns - len(self.artificial_vars)]
                 self.current_non_base_index = _get_non_base_index(self.current_base_index, self.A_expanded.shape[1])
             # Phase 2
-            cost_vector = np.asarray(model.c)
+            cost_vector = np.asarray([model.c])
             if cost_vector.shape[1] == 1:
                 cost_vector = cost_vector.transpose()
             current_solution, self.current_base_index, self.current_non_base_index, is_feasible = \
                 self._phase2_simplex(cost_vector, self.verbose)
             if is_feasible:
-                final_cost_value = _get_final_cost_value(current_solution, cost_vector, self.current_base_index)
+                final_cost_value = _get_final_cost_value(current_solution, cost_vector, self.current_base_index, model.original_objective)
                 if self.verbose:
                     print_final_cost(self.current_base_index, current_solution, final_cost_value)
                 return 'Solved', final_cost_value, current_solution
@@ -124,11 +118,6 @@ class TwoPhaseSimplexSolver:
     def inverse_base_matrix_update(self, index_to_leave_base=None, index_entering_base=None):
         matrix_a_base_cols = _get_array_from_index(self.A_expanded, self.current_base_index)
         self.inverse_base_matrix = np.linalg.inv(matrix_a_base_cols)
-        # if self.inverse_base_matrix is None:
-        #     matrix_a_base_cols = _get_array_from_index(self.A_expanded, self.current_base_index)
-        #     self.inverse_base_matrix = np.linalg.inv(matrix_a_base_cols)
-        # else:
-        #     pass
 
 
 def print_final_cost(current_base_index, current_solution, final_cost_value):
@@ -148,12 +137,14 @@ def _check_current_base_solution_is_valid(current_base_solution):
         raise ValueError("Solution must be grater than or equal 0.")
 
 
-def _get_final_cost_value(current_solution, cost_vector, current_base_index):
+def _get_final_cost_value(current_solution, cost_vector, current_base_index, max_or_min):
     current_cost_base_index = _get_array_from_index(cost_vector, current_base_index)
-    return np.matmul(current_cost_base_index, current_solution)
+    partial_result = np.matmul(current_cost_base_index, current_solution)
+    if max_or_min == "max":
+        partial_result *= -1
+    return partial_result
 
 
-# @jit(nopython=True)
 def _create_aux_slack_cost_function(n_variables, artificial_cols, high_cost_const=10e3):
     # Create the objective function
     aux_slack_cost_vector = np.zeros(n_variables)
@@ -161,12 +152,10 @@ def _create_aux_slack_cost_function(n_variables, artificial_cols, high_cost_cons
     return np.array([aux_slack_cost_vector])
 
 
-# @jit(nopython=True)
 def _get_array_from_index(array, list_of_index):
     return np.take(array.copy(), list_of_index, axis=1)
 
 
-# @jit(nopython=True)
 def _get_reduced_cost_vector(matrix_A, cost_vector, non_base_index, base_index, inv_matrix_base):
     vector_cost_non_base_vars = _get_array_from_index(cost_vector, non_base_index)
     vector_cost_base_vars = _get_array_from_index(cost_vector, base_index)
@@ -177,19 +166,22 @@ def _get_reduced_cost_vector(matrix_A, cost_vector, non_base_index, base_index, 
     return reduce_cost_transposed
 
 
-# @jit(nopython=True)
 def _get_non_base_index(base_index, n_cols_matrix_a):
     return [i for i in range(n_cols_matrix_a) if i not in base_index]
 
 
-# @jit(nopython=True)
 def _get_values_from_set(base_feasible_set):
     return list(map(lambda x: x[1], base_feasible_set))
 
 
-# @jit(nopython=True)
 def filter_ratio_test_for_non_negative_variables(vector_1, vector_2):
-    pass
+    removed_index = 0
+    for index, item in enumerate(vector_2):
+        if item[0] <= 0:
+            vector_2 = np.delete(vector_2, index)
+            vector_1 = np.delete(vector_1, index)
+            removed_index += 1
+    return vector_1, vector_2, removed_index
 
 
 def get_entering_base_index(index_to_leave_base, current_base_solution, inverse_base_vector, matrix_a):
@@ -197,14 +189,19 @@ def get_entering_base_index(index_to_leave_base, current_base_solution, inverse_
     leaving_base_column = _get_array_from_index(matrix_a, index_to_leave_base)
     leaving_base_column = np.array([leaving_base_column]).transpose()
     variable_cost_column = np.matmul(inverse_base_vector, leaving_base_column)
-    leaving_base_column, variable_cost_column = filter_ratio_test_for_non_negative_variables(current_base_solution,
-                                                                                             variable_cost_column)
-    ratio = np.divide(current_base_solution, variable_cost_column)
-    index_entering_base = np.argmin(np.abs(ratio))
+    # ratio test
+    ratio_list = []
+    index_list = []
+    for index, item in enumerate(variable_cost_column):
+        if item > 0:
+            ratio = current_base_solution[index] / item
+            ratio_list.append(ratio)
+            index_list.append(index)
+    min_ration_index = np.argmin(ratio_list)
+    index_entering_base = index_list[min_ration_index]
     return index_entering_base
 
 
-# @jit(nopython=True)
 def get_base_leaving_index(reduced_cost):
     cost_negative = reduced_cost * -1
     index_colum_to_leave = np.argmax(cost_negative)
@@ -213,7 +210,6 @@ def get_base_leaving_index(reduced_cost):
     return False, index_colum_to_leave
 
 
-# @jit(nopython=True)
 def replace_item_array(array, item_out, item_in):
     for index, val in enumerate(array):
         if val == item_out:
